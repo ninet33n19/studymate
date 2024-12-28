@@ -6,35 +6,26 @@ import { Card, CardContent } from "@/components/ui/card";
 interface FlashcardProps {
   question: string;
   answer: string;
+  topic?: string;
 }
 
-export default function Flashcard({ question, answer }: FlashcardProps) {
-  const [isFlipped, setIsFlipped] = useState(false);
-
-  const handleFlip = () => {
-    setIsFlipped(!isFlipped);
-  };
+export default function Flashcard({ question, answer, topic }: FlashcardProps) {
+  console.log("Rendering Flashcard with:", { question, answer, topic }); // Debug log
 
   return (
-    <div
-      className="relative h-[400px] w-[600px] cursor-pointer [perspective:1000px]"
-      onClick={handleFlip}
-    >
-      <div
-        className={`absolute h-full w-full transition-all duration-500 [transform-style:preserve-3d] ${
-          isFlipped ? "[transform:rotateY(180deg)]" : ""
-        }`}
-      >
-        <Card className="absolute h-full w-full [backface-visibility:hidden] shadow-lg">
-          <CardContent className="flex h-full items-center justify-center p-8 text-center">
-            <p className="text-3xl font-semibold">{question}</p>
-          </CardContent>
-        </Card>
-        <Card className="absolute h-full w-full [backface-visibility:hidden] shadow-lg [transform:rotateY(180deg)]">
-          <CardContent className="flex h-full items-center justify-center p-8 text-center">
-            <p className="text-3xl font-semibold">{answer}</p>
-          </CardContent>
-        </Card>
+    <div className="w-96 h-60 perspective-1000">
+      <div className="relative w-full h-full cursor-pointer">
+        <div className="absolute w-full h-full bg-white rounded-xl shadow-lg p-6">
+          {topic && (
+            <div className="text-sm text-gray-500 mb-2">Topic: {topic}</div>
+          )}
+          <div className="text-xl font-medium">
+            Q: {question || "No question available"}
+          </div>
+          <div className="mt-4 text-gray-600">
+            A: {answer || "No answer available"}
+          </div>
+        </div>
       </div>
     </div>
   );
