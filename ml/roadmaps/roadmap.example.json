@@ -1,0 +1,26 @@
+{
+
+
+    "user_id": "user_12345",
+    "standard": "10",
+    "degree": "High School Diploma",
+    "stages":[
+        {
+            "date": "2024-10-15",
+            "time": "10:00",
+            "title": "Learn Algebra",
+            "description":
+                "random tips for algebra"
+        },
+        {
+            "date": "2024-10-17",
+            "time": "10:00",
+            "title": "Geometry Exam",
+            "description":
+                "Tips for geometry"
+        }
+        
+
+
+    ]
+}
