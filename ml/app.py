@@ -1,166 +1,290 @@
-from flask import Flask, request, jsonify
-from .storage import save_portfolio, load_portfolio
-from .chatbot import process_query
-import json
+import os
+import mimetypes
+import openai
+import spacy
+from spacy.lang.en.stop_words import STOP_WORDS
 from datetime import datetime
+from flask import Flask, request, jsonify
+from PyPDF2 import PdfReader
+import docx2txt
+from flask_cors import CORS
+from langchain_openai import OpenAIEmbeddings
+import json
+from uitils.extraction import extract_text_from_file, extract_doctype_from_file, extract_embeddings_from_file, extract_keywords_from_file, extract_chapter_name_subject, extract_syllabus_or_date_changes
+from uitils.portfolio import createProfile, updateProfile, addRoadmap
+from uitils.chatbot import process_query, check_up_call,generate_quiz,generate_openai
+from pymongo import MongoClient
+from uitils.test import test_extract_text_from_file
+from uitils.courses import generate_course
+from uitils.flashcards import SimpleFlashcardGenerator
+import dotenv
+dotenv.load_dotenv()
 
+# Initialize the Flask app
 app = Flask(__name__)
+CORS(app)
+# Initialize NLP
+# nlp = spacy.load("en_core_web_sm")
 
-# Load the portfolio database from MongoDB (using the load_portfolio from storage.py)
-portfolio_db = load_portfolio()
 
-def createProfile(data):
-    user_id = data.get("user_id")
-    if not user_id:
-        return {"status": "error", "message": "User ID is required"}
-    
-    # Check if user profile already exists
-    if user_id in portfolio_db:
-        return {"status": "error", "message": "User profile already exists"}
-    
-    # Initialize the calendar field if not present
-    if "calendar" not in data:
-        data["calendar"] = []
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+client = MongoClient(MONGO_URI)
+db = client['RGIT_DB']
+FILES_COLLECTION = "files"
+METADATA_COLLECTION = "metadata"
+USER_COLLECTION = "users"
+ROADMAP_COLLECTION="roadmap"
+# Set up local storage directories
+LOCAL_FILES_DIR = "./files"
+LOCAL_METADATA_DIR = "./metadata"
+os.makedirs(LOCAL_FILES_DIR, exist_ok=True)
+os.makedirs(LOCAL_METADATA_DIR, exist_ok=True)
 
-    portfolio_db[user_id] = data
-    save_portfolio(portfolio_db)
-    print("Current Portfolio DB (after creation):", portfolio_db)
-    return {"status": "success", "message": "Profile created successfully", "data": data}
+# Load environment variables (e.g., OpenAI API key)
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def updateProfile(user_id, updated_data):
-    if not user_id:
-        return {"status": "error", "message": "User ID is required"}
-    if user_id not in portfolio_db:
-        return {"status": "error", "message": "User profile not found"}
-    
-    # Initialize calendar if not present
-    if "calendar" not in portfolio_db[user_id]:
-        portfolio_db[user_id]["calendar"] = []
-    
-    portfolio_db[user_id].update(updated_data)
-    if 'calendar' in updated_data:
-        existing_calendar = portfolio_db[user_id].get('calendar', [])
-        new_calendar_events = updated_data['calendar']
-        existing_calendar.extend(new_calendar_events)
-        portfolio_db[user_id]['calendar'] = existing_calendar
-    
-    save_portfolio(portfolio_db)
-    print("Current Portfolio DB (after update):", portfolio_db)
-    return {"status": "success", "message": "Profile updated successfully"}
 
-def getProfile(user_id):
-    if not user_id:
-        return {"status": "error", "message": "User ID is required"}
-    profile = portfolio_db.get(user_id)
-    if not profile:
-        return {"status": "error", "message": "User profile not found"}
-    
-    # Initialize calendar if not present
-    if "calendar" not in profile:
-        profile["calendar"] = []
-    
-    return {"status": "success", "data": profile}
+@app.route('/upload', methods=['POST'])
+def upload_document():
+    """
+    API endpoint to upload a file, extract metadata and content, and store in local storage.
+    """
+    user_id = request.form.get("user_id")
+    file = request.files.get("file")
 
-def addRoadmap(user_id, prompt):
-    # Get current date
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    
-    response = process_query(
-        f"Generate a roadmap for me for the most efficient learning. Additional prompt by me: {prompt}. "
-        f"Return a json array string which has keys as dates as , and value contains 'time', 'title','description'. "
-        f"Do not respond in markdown, simply respond in plaintext. Use the current date ({current_date}) for events.",
-        {"user_id": user_id}
-    )
-    a = response["generated_text"].strip().replace("```json", "").replace("```", "")
-    roadmap = json.loads(a)
-    return roadmap
+    if not user_id or not file:
+        return jsonify({"error": "User ID and file are required"}), 400
 
-@app.route('/portfolio/load', methods=['POST'])
-def loadRoadmap():
+    # Detect content type of the file
+    content_type, _ = mimetypes.guess_type(file.filename)
+    file_size = len(file.read())
+    file.seek(0)
+
+    # Save the file locally
+    file_path = os.path.join(LOCAL_FILES_DIR, file.filename)
+    file.save(file_path)
+
+    # Extract file metadata
+    file_metadata = {
+        "file_name": file.filename,
+        "file_type": content_type,
+        "upload_date": datetime.utcnow().isoformat(),
+        "file_size": file_size,
+        "page_count": None  # Can be extracted for PDFs or DOCX if needed
+    }
+
+    # Extract text from the file
+    extracted_text = extract_text_from_file(file, content_type)
+
+    # Generate embeddings
+    embeddings = extract_embeddings_from_file(extracted_text)
+
+    # Extract keywords/topics from the document
+    keywords = extract_keywords_from_file(extracted_text)
+
+    # Classify the document (study material, announcement, etc.)
+    doc_type = extract_doctype_from_file(extracted_text)
+
+    # Extract chapter name and subject if study material
+    chapter_info = None
+    if doc_type == "STUDY_MATERIAL":
+        chapter_info = extract_chapter_name_subject(extracted_text,user_id)
+        
+
+    # Extract syllabus or date changes if announcement
+    announcement_info = None
+    if doc_type == "ANNOUNCEMENT":
+        announcement_info = extract_syllabus_or_date_changes(extracted_text,user_id)
+        #### TODO Trigger portfolio updation here ( /portfolio/update)
+
+    # Document content structure
+    document_content = {
+        "extracted_text": extracted_text,
+        "embeddings": embeddings,
+        "key_topics": keywords,
+       # This could be more advanced NER if required
+    }
+
+    # Classification structure
+    classification = {
+        "document_type": doc_type,
+        "subject": chapter_info.get("subject") if chapter_info else None,
+        "chapter_name": chapter_info.get("chapter") if chapter_info else None,
+        "syllabus_or_date_changes": announcement_info if doc_type == "ANNOUNCEMENT" else None
+    }
+    metadata_doc = {
+        "user_id": user_id,
+        "file_metadata": file_metadata,
+        "document_content": document_content,
+        "classification": classification
+    }
+
+    # Save metadata and content to a JSON file
+    metadata_id = db[METADATA_COLLECTION].insert_one(metadata_doc).inserted_id
+
+    return jsonify({"message": "File uploaded and processed successfully"}), 200
+
+
+
+@app.route('/test', methods=['POST'])
+def solve_test():
+    file = request.files.get("file")
+    user_id = request.form.get("user_id",None)
+    prompt =request.form.get("prompt",None)
+    response=test_extract_text_from_file(file,prompt=prompt,user_id=user_id)
+    return jsonify({"response":response})
+
+@app.route('/portfolio/create', methods=['POST'])
+def create_profile():
+    """ Code to create profile """
     data = request.json
-    user_id = data.get("user_id")
-    prompts = data.get("prompts")
+    return createProfile(data)
     
-    if not user_id:
-        return jsonify({"status": "error", "message": "User ID is required"}), 400
-    
-    # Retrieve user profile
-    profile = portfolio_db.get(user_id)
-    if not profile:
-        return jsonify({"status": "error", "message": "User profile not found"}), 404
-    
-    # Initialize the calendar if not present
-    if "calendar" not in profile:
-        profile["calendar"] = []
-    
-    # Get the current date
-    current_date = datetime.now().strftime("%Y-%m-%d")
 
-    # Add the prompt events into the calendar
-    if prompts:
-        new_event = {
-            "date": current_date,  # Use current date instead of static date
-            "time": "10:00 AM",
-            "title": "Exam",
-            "description": f"Exam based on prompt: {prompts}",
-        }
-        profile["calendar"].append(new_event)
-
-    # Save the updated profile with the new calendar event
-    portfolio_db[user_id] = profile
-    save_portfolio(portfolio_db)
-    
-    return jsonify({"status": "success", "message": "Roadmap loaded and updated", "calendar": profile["calendar"]}), 200
-
-@app.route('/portfolio/mark_complete', methods=['POST'])
-def markComplete():
+@app.route('/portfolio/update', methods=['POST'])
+def update_profile():
+    """ Code to update profile """
     data = request.json
-    user_id = data.get("user_id")
-    date = data.get("date")
-    
-    if not user_id or not date:
-        return jsonify({"status": "error", "message": "User ID and date are required"}), 400
-    
-    # Retrieve user profile
-    profile = portfolio_db.get(user_id)
-    if not profile:
-        return jsonify({"status": "error", "message": "User profile not found"}), 404
-    
-    # Initialize calendar if not present
-    if "calendar" not in profile:
-        profile["calendar"] = []
-    
-    # Check if the event exists in the calendar
-    calendar = profile.get("calendar", [])
-    event = next((e for e in calendar if e["date"] == date), None)
-    
-    if not event:
-        return jsonify({"status": "error", "message": "Event not found for the given date"}), 404
-    
-    # Mark the event as complete
-    event["completed"] = True
-    save_portfolio(portfolio_db)
-    
-    return jsonify({"status": "success", "message": "Event marked as complete", "data": event}), 200
+    return updateProfile(data['user_id'],data)
 
-@app.route('/portfolio/get_roadmap', methods=['GET'])
-def getRoadmap():
+
+
+@app.route('/portfolio/roadmap', methods=['POST'])
+def add_roadmap():
+    user_id = request.json.get("user_id", "user_1")
+    prompt = request.json.get("prompt",None)
+    
+    """ Code to create roadmap """
+    return addRoadmap(user_id,prompt)
+    
+@app.route('/chatbot', methods=['POST'])
+def chatbot():
+    """
+    API endpoint to process a query using the chatbot model.
+    """
+    data = request.json
+    text = data.get("text")
+    params = data.get("params", {})
+
+    response = process_query(text, params)
+    return jsonify({"response": response}), 200
+
+
+@app.route('/call', methods=['POST'])
+def call():
+    # Extract the JSON body
+    data = request.get_json()
+    if not data or 'name' not in data or 'phone_number' not in data:
+        return jsonify({"error": "Please provide both 'name' and 'phone_number' in the request body"}), 400
+
+    student_name = data['name']
+    phone_number = data['phone_number']
+
+    # Call the function with dynamic inputs
+    tx = check_up_call(student_name, phone_number)
+    return jsonify({"response": tx})
+
+@app.route('/interview', methods=['POST'])
+def interview_call():
+    # Extract JSON input
+    data = request.get_json()
+    if not data or 'name' not in data or 'phone_number' not in data:
+        return jsonify({"error": "Please provide both 'name' and 'phone_number' in the request body"}), 400
+
+    student_name = data['name']
+    phone_number = data['phone_number']
+
+    # Call the function with dynamic inputs
+    tx = interview_call(student_name, phone_number)  # Pass both arguments here
+    return jsonify({"response": tx})
+
+    # Call the function with dy
+
+
+@app.route('/user', methods=['GET'])
+def get_profile():
     user_id = request.args.get("user_id")
+    user_profile = db[USER_COLLECTION].find_one({"user_id": user_id})
+    #remove object id
+    user_profile={k: v for k, v in user_profile.items() if k != '_id'}
+    return jsonify({"profile": user_profile}), 200
+
+@app.route('/user/document', methods=['GET'])
+def get_user_documents():
+    user_id = request.args.get("user_id")
+    documents = db[METADATA_COLLECTION].find({"user_id": user_id})
+    
+    #remove object id
+    documents=[{k: v for k, v in doc.items() if k != '_id'} for doc in documents]
+    
+    return jsonify({"documents": list(documents)}), 200
+
+@app.route('/load-roadmaps', methods=['POST'])
+def load_roadmaps():
+    user_id = request.json.get("user_id")
+    
     if not user_id:
-        return jsonify({"status": "error", "message": "User ID is required"}), 400
+        return jsonify({"error": "User ID is required"}), 400
     
-    # Retrieve user profile
-    profile = portfolio_db.get(user_id)
-    if not profile:
-        return jsonify({"status": "error", "message": "User profile not found"}), 404
+    # Fetch the roadmaps from MongoDB for the provided user_id
+    roadmaps = db[ROADMAP_COLLECTION].find({"user_id": user_id})
     
-    # Initialize the calendar if not present
-    if "calendar" not in profile:
-        profile["calendar"] = []
+    # Remove object IDs from the response
+    roadmaps = [{"title": roadmap["title"], "roadmap": roadmap["roadmap"]} for roadmap in roadmaps]
     
-    # Fetch calendar
-    calendar = profile.get("calendar", [])
-    return jsonify({"status": "success", "data": calendar}), 200
+    return jsonify({"roadmaps": roadmaps}), 200
+
+
+@app.route('/quiz', methods=['POST'])
+def quiz():
+    data = request.json
+    prompt = data.get("prompt",[])
+    user_id = data.get("user_id")
+    quiz= generate_quiz(prompt,user_id=user_id,num_questions=data.get("num_questions",5))
+    return jsonify({"response": quiz}), 200
+
+@app.route('/course', methods=['POST'])
+def generate_course_endpoint():
+    try:
+        # Get file from the request
+        file = request.files['file']
+        
+        # Generate course content
+        course_content = generate_course(file)
+        
+        # Return the JSON response
+        return jsonify(course_content)
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/flashcards', methods=['POST'])
+def generate_flashcard_endpoint():
+    try:
+        # Get the folder path from the request
+        data = request.get_json()  # Receive the JSON data
+        folder_path = data.get('folder_path')  # Get the folder path from the JSON
+
+        if not folder_path:
+            return jsonify({"error": "No folder path provided"}), 400
+        
+        # Initialize the flashcard generator with your API key
+        api_key = os.getenv('API_KEY')  # Ensure the API key is set in your environment
+        flashcard_generator = SimpleFlashcardGenerator(api_key)
+
+        # Process the PDFs in the provided folder and generate flashcards
+        result = flashcard_generator.process_pdfs(folder_path)
+
+        # Return the generated flashcards and summary
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0")
