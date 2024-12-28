@@ -4,10 +4,6 @@ import PyPDF2
 import google.generativeai as genai
 import json
 import time
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 class SimpleFlashcardGenerator:
     def __init__(self, api_key: str):
@@ -94,41 +90,3 @@ class SimpleFlashcardGenerator:
         }
 
         return result
-
-def main():
-    # Configuration
-    API_KEY = os.getenv("API_KEY") #Replace with your API key
-  
-    PDF_FOLDER = "your-document-folder-path"   # Replace with your PDF folder path
-
-    try:
-        # Initialize generator
-        generator = SimpleFlashcardGenerator(API_KEY)
-
-        # Process PDFs and generate flashcards
-        print(f"Processing PDFs from: {PDF_FOLDER}")
-        result = generator.process_pdfs(PDF_FOLDER)
-
-        # Save results
-        with open("flashcards.json", "w") as f:
-            json.dump(result, f, indent=2)
-
-        # Print summary
-        print("\nProcessing complete!")
-        print(f"Total files processed: {result['summary']['total_files']}")
-        print(f"Total flashcards generated: {result['summary']['total_flashcards']}")
-
-        # Print sample flashcards
-        if result['flashcards']:
-            print("\nSample flashcards:")
-            for card in result['flashcards'][:3]:  # Show first 3 cards
-                print("\n---")
-                print(f"Topic: {card['topic']}")
-                print(f"Q: {card['question']}")
-                print(f"A: {card['answer']}")
-
-    except Exception as e:
-        print(f"Error: {e}")
-
-if __name__ == "__main__":
-    main()
