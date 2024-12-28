@@ -16,28 +16,54 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 
 export default function RegisterPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("meet.djsce@gmail.com");
+  const [password, setPassword] = useState("pass@123");
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+
     try {
-      const res = await fetch("/api/register", {
+      const registerRes = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
-      if (res.ok) {
-        toast({
-          title: "Registration Successful",
-          description: "Please log in with your credentials",
+      let data;
+      try {
+        data = await registerRes.json();
+      } catch (error) {
+        throw new Error("Invalid response from server");
+      }
+
+      if (registerRes.ok) {
+        // If registration is successful, automatically sign them in
+        const signInResult = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
         });
-        router.push("/login");
+
+        if (signInResult?.error) {
+          toast({
+            title: "Authentication Failed",
+            description:
+              "Registration successful but couldn't log you in automatically. Please try logging in.",
+            variant: "destructive",
+          });
+          router.push("/login");
+        } else {
+          toast({
+            title: "Registration Successful",
+            description: "Please complete your profile details",
+          });
+          router.push("/register/details");
+        }
       } else {
-        const data = await res.json();
         toast({
           title: "Registration Failed",
           description: data.error || "An error occurred during registration",
@@ -48,15 +74,45 @@ export default function RegisterPage() {
       console.error("Error:", error);
       toast({
         title: "Registration Error",
-        description: "An unexpected error occurred. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleGoogleRegister = () => {
-    signIn("google", { callbackUrl: "/dashboard" });
+  const handleGoogleRegister = async () => {
+    setIsLoading(true);
+    try {
+      const result = await signIn("google", {
+        redirect: false,
+        callbackUrl: "/register/details",
+      });
+
+      if (result?.error) {
+        toast({
+          title: "Authentication Failed",
+          description: "Failed to sign in with Google",
+          variant: "destructive",
+        });
+      } else {
+        router.push("/register/details");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An error occurred during Google sign-in",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
+
   return (
     <div className="flex min-h-screen bg-blue-50">
       <Card className="flex-1 rounded-none shadow-2xl z-10 flex flex-col justify-center items-center bg-white">
@@ -81,6 +137,10 @@ export default function RegisterPage() {
                     type="email"
                     placeholder="m@example.com"
                     className="w-full border-blue-200 focus:border-green-500 focus:ring-green-500"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isLoading}
+                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -94,18 +154,23 @@ export default function RegisterPage() {
                     id="password"
                     type="password"
                     className="w-full border-blue-200 focus:border-green-500 focus:ring-green-500"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading}
+                    required
                   />
                 </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Processing..." : "Register"}
+                </Button>
               </div>
             </form>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
-              asChild
-            >
-              <Link href="/register/details">Register</Link>
-            </Button>
             <div className="relative w-full">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-blue-200" />
@@ -120,6 +185,7 @@ export default function RegisterPage() {
               variant="outline"
               className="w-full border-blue-200 text-blue-700 hover:bg-blue-50"
               onClick={handleGoogleRegister}
+              disabled={isLoading}
             >
               <svg
                 className="mr-2 h-4 w-4"
@@ -136,12 +202,13 @@ export default function RegisterPage() {
                   d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"
                 ></path>
               </svg>
-              Google
+              {isLoading ? "Processing..." : "Google"}
             </Button>
             <Button
               variant="link"
               className="w-full text-blue-700 hover:text-blue-900"
               asChild
+              disabled={isLoading}
             >
               <Link href="/login">Already have an account? Login here</Link>
             </Button>
@@ -149,13 +216,7 @@ export default function RegisterPage() {
         </div>
       </Card>
       <div className="relative flex-1 hidden md:block">
-        {/* <Image
-          src="/"
-          alt="Education background"
-          layout="fill"
-          objectFit="cover"
-          className="rounded-l-3xl"
-        /> */}
+        {/* Image section */}
       </div>
     </div>
   );

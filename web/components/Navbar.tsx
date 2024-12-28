@@ -23,7 +23,7 @@ export const Navbar = () => {
           {/* Logo */}
           <Link href="/" className="flex items-center">
             <span className="text-xl font-bold text-primary-foreground">
-              StudyAI
+              Studymate
             </span>
           </Link>
 
@@ -38,8 +38,12 @@ export const Navbar = () => {
                 {item.label}
               </a>
             ))}
-            <Button>Sign in</Button>
-            <Button>Get Started</Button>
+            <Button>
+              <Link href="/login">Sign in</Link>
+            </Button>
+            <Button>
+              <Link href="/register">Get Started</Link>
+            </Button>
           </div>
 
           {/* Mobile menu button */}
