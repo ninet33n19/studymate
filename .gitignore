@@ -44,3 +44,4 @@ build/
 # DSTORE and temporary Jupyter files
 *.dstore/
 *.checkpoint
+*.json
