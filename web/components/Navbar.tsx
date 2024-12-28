@@ -1,9 +1,5 @@
 "use client";
 
-import {
-  RegisterLink,
-  LoginLink,
-} from "@kinde-oss/kinde-auth-nextjs/components";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
@@ -42,8 +38,8 @@ export const Navbar = () => {
                 {item.label}
               </a>
             ))}
-            <LoginLink>Sign in</LoginLink>
-            <RegisterLink>Get Started</RegisterLink>
+            <Button>Sign in</Button>
+            <Button>Get Started</Button>
           </div>
 
           {/* Mobile menu button */}
@@ -79,8 +75,8 @@ export const Navbar = () => {
               </a>
             ))}
             <div className="flex flex-col space-y-2 p-3">
-              <LoginLink className="w-full">Sign in</LoginLink>
-              <RegisterLink className="w-full">Get Started</RegisterLink>
+              <Button className="w-full">Sign in</Button>
+              <Button className="w-full">Get Started</Button>
             </div>
           </div>
         </div>
