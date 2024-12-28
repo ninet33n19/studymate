@@ -44,7 +44,7 @@ export function Sidebar({ darkMode }: SidebarProps) {
           Dashboard
         </Link>
         <Link
-          href="#"
+          href="/documents"
           className={`flex items-center gap-3 rounded-lg px-3 py-2 ${darkMode ? "text-gray-300 hover:bg-gray-800" : "text-gray-700 hover:bg-gray-100"}`}
         >
           <FileText className="h-5 w-5" />
