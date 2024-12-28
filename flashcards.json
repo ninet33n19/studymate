@@ -1,0 +1,103 @@
+{
+  "summary": {
+    "total_files": 3,
+    "total_flashcards": 15,
+    "processed_files": [
+      "ALOHA CSMA.pdf",
+      "Erro...pdf",
+      "Data link protocols.pdf"
+    ]
+  },
+  "flashcards": [
+    {
+      "question": "What are the two sublayers of the Data Link Layer?",
+      "answer": "The Data Link Layer is divided into two sublayers: the Logical Link Control (LLC) layer and the Media Access Control (MAC) layer.",
+      "topic": "Data Link Layer Sublayers",
+      "source": "Provided Content"
+    },
+    {
+      "question": "What is the main responsibility of the Logical Link Control (LLC) layer?",
+      "answer": "The LLC layer is responsible for data link control, including flow and error control.",
+      "topic": "LLC Layer Function",
+      "source": "Provided Content"
+    },
+    {
+      "question": "What is the main responsibility of the Media Access Control (MAC) layer?",
+      "answer": "The MAC layer is responsible for resolving access to the shared medium.",
+      "topic": "MAC Layer Function",
+      "source": "Provided Content"
+    },
+    {
+      "question": "What is a multiple-access protocol used for?",
+      "answer": "A multiple-access protocol is used to coordinate access to a shared link (multipoint or broadcast link) when multiple nodes are connected.",
+      "topic": "Multiple-Access Protocols",
+      "source": "Provided Content"
+    },
+    {
+      "question": "What are the two key features of Random Access protocols?",
+      "answer": "Random Access protocols have two key features: 1) there is no scheduled transmission time and 2) stations compete with each other for medium access.",
+      "topic": "Random Access Protocols",
+      "source": "Provided Content"
+    },
+    {
+      "question": "What are the two basic modes of digital data transmission?",
+      "answer": "Parallel communication and serial communication.",
+      "topic": "Digital Data Communication Types",
+      "source": "Lecture Note \u2013 Mr. Sarath V Sankaran , JCET"
+    },
+    {
+      "question": "How does parallel communication transmit data?",
+      "answer": "It groups several bits (e.g., 8) and sends all the bits simultaneously over multiple wires.",
+      "topic": "Digital Data Communication Types",
+      "source": "Lecture Note \u2013 Mr. Sarath V Sankaran , JCET"
+    },
+    {
+      "question": "What is the primary advantage and disadvantage of parallel transmission?",
+      "answer": "Advantage: Higher speed. Disadvantage: Higher cost of cabling and is only suitable for short distances.",
+      "topic": "Digital Data Communication Types",
+      "source": "Lecture Note \u2013 Mr. Sarath V Sankaran , JCET"
+    },
+    {
+      "question": "How does serial communication transmit data?",
+      "answer": "It sends one data bit at a time over a single pair of wires.",
+      "topic": "Digital Data Communication Types",
+      "source": "Lecture Note \u2013 Mr. Sarath V Sankaran , JCET"
+    },
+    {
+      "question": "What are the advantages of using serial communication over parallel communication?",
+      "answer": "Reduced cost of cabling, reduced cross-talk, inherent device characteristics, and smaller connector size for portable devices.",
+      "topic": "Digital Data Communication Types",
+      "source": "Lecture Note \u2013 Mr. Sarath V Sankaran , JCET"
+    },
+    {
+      "question": "What is the primary purpose of the data-link layer?",
+      "answer": "To provide node-to-node communication, delivering datagrams to the next node in the path.",
+      "topic": "Data Link Layer Introduction",
+      "source": "Unit 2"
+    },
+    {
+      "question": "What are the two main components in data-link layer communication paths?",
+      "answer": "Nodes (hosts and routers) and Links (LANs and WANs)",
+      "topic": "Nodes and Links",
+      "source": "Unit 2"
+    },
+    {
+      "question": "What are the two main services provided by the data-link layer?",
+      "answer": "Framing (encapsulation and decapsulation) and Flow Control",
+      "topic": "Data Link Layer Services",
+      "source": "Unit 2"
+    },
+    {
+      "question": "What is 'framing' in the context of the data-link layer?",
+      "answer": "Encapsulating a datagram into a frame before sending, and decapsulating it upon receiving.",
+      "topic": "Framing",
+      "source": "Unit 2"
+    },
+    {
+      "question": "Why is 'flow control' necessary in the data-link layer?",
+      "answer": "To manage the rate of frame production and consumption, preventing buffer overflow at the receiving end.",
+      "topic": "Flow Control",
+      "source": "Unit 2"
+    }
+  ]
+}

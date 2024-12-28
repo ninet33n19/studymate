@@ -5,11 +5,13 @@ import uvicorn
 import json
 # Import the SimpleFlashcardGenerator
 from flashcards import SimpleFlashcardGenerator
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
 app = FastAPI()
 
 # Initialize the generator with your API key
-API_KEY = "AIzaSyA4HXmmR7iZV7INWAptDpgF0R5rZm_MBds"  # Replace with your actual API key
+API_KEY = os.getenv("GOOGLE API KEY")  # Replace with your actual API key
 generator = SimpleFlashcardGenerator(API_KEY)
 
 class FolderRequest(BaseModel):
