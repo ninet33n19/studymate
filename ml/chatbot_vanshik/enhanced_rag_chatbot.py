@@ -21,6 +21,10 @@ import spacy
 import json
 from dataclasses import dataclass
 from enum import Enum
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Load spaCy model for text processing
 nlp = spacy.load("en_core_web_sm")
@@ -631,8 +635,8 @@ class EnhancedRAGChatbot:
         }
 def main():
     # Configuration
-    DOCUMENT_PATH = "/Users/vanshikwaghela/Desktop/Screenshot 2024-12-28 at 9.35.25 AM.png"  # Your image path
-    GOOGLE_API_KEY = "AIzaSyA4HXmmR7iZV7INWAptDpgF0R5rZm_MBds"
+    DOCUMENT_PATH = "your-image-or-document-path"  # Your image path
+    GOOGLE_API_KEY = os.getenv("API_KEY")  # Your  API key
     
     # Sample user profile
     user_profile = UserProfile(

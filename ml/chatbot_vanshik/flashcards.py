@@ -4,6 +4,10 @@ import PyPDF2
 import google.generativeai as genai
 import json
 import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class SimpleFlashcardGenerator:
     def __init__(self, api_key: str):
@@ -93,8 +97,9 @@ class SimpleFlashcardGenerator:
 
 def main():
     # Configuration
-    API_KEY = "AIzaSyA4HXmmR7iZV7INWAptDpgF0R5rZm_MBds"  # Replace with your API key
-    PDF_FOLDER = "/Users/vanshikwaghela/DJ/Sem 5/EM/Module 4"   # Replace with your PDF folder path
+    API_KEY = os.getenv("API_KEY") #Replace with your API key
+  
+    PDF_FOLDER = "your-document-folder-path"   # Replace with your PDF folder path
 
     try:
         # Initialize generator

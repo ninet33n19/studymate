@@ -1,0 +1,46 @@
+# Python virtual environments
+.env/
+.venv/
+env/
+venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter Notebook checkpoints and metadata
+.ipynb_checkpoints/
+*.ipynb.dstore/
+*.ipynb.dstore/*
+
+# System files
+.DS_Store
+Thumbs.db
+*.log
+
+# Environment variables and secrets
+.env
+*.env
+
+# VSCode settings (optional, if you use it)
+.vscode/
+
+# Byte-compiled, coredumps
+*.so
+*.dll
+*.dylib
+*.core
+
+# Logs, temporary files
+*.log
+*.tmp
+*.temp
+
+# Generated folders
+dist/
+build/
+
+# DSTORE and temporary Jupyter files
+*.dstore/
+*.checkpoint
