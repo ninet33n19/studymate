@@ -1,101 +1,222 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, Response
 from werkzeug.utils import secure_filename
-import os
 import PyPDF2
 import pytesseract
 from PIL import Image
+import nltk
+from nltk.tokenize import sent_tokenize, word_tokenize
+from nltk.corpus import stopwords
+from nltk.tag import pos_tag
+from datetime import datetime
+import logging
+import re
+import io
+import spacy
+from typing import Dict, List, Optional, Tuple
 
 app = Flask(__name__)
 
-# Get the directory of the current script and set the paths for uploads and outputs
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Get the folder where this script is located
-UPLOAD_FOLDER = os.path.join(BASE_DIR,  'uploads')  # Save uploads in the 'digi_notes/uploads' folder
-OUTPUT_FOLDER = os.path.join(BASE_DIR,  'outputs')  # Save outputs in the 'digi_notes/outputs' folder
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
-# Create the directories if they don't exist
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+# Download required NLTK data
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('averaged_perceptron_tagger')
 
-ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
+# Configuration
+class Config:
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
+    PORT = 8000
 
-def allowed_file(filename):
-    """Check if the uploaded file is of an allowed extension."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+# Load pre-trained SpaCy model
+nlp = spacy.load('en_core_web_sm')
 
-def extract_text_from_pdf(pdf_path):
-    """Extract text from PDF."""
-    text = ""
-    try:
-        with open(pdf_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            for page in reader.pages:
+class TextProcessor:
+    @staticmethod
+    def clean_text(text: str) -> str:
+        """Clean and normalize text."""
+        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'[^\w\s.,!?]', '', text)
+        return text.strip()
+
+    @staticmethod
+    def get_important_sentences(sentences: List[str], num_sentences: int = 10) -> List[str]:
+        """Select important sentences based on length and content."""
+        meaningful_sentences = []
+        for sentence in sentences:
+            if len(sentence.split()) > 5:
+                tagged = pos_tag(word_tokenize(sentence))
+                if any(tag.startswith('VB') for word, tag in tagged):
+                    meaningful_sentences.append(sentence)
+        
+        return meaningful_sentences[:num_sentences]
+
+class DocumentProcessor:
+    @staticmethod
+    def extract_text_from_pdf(pdf_file) -> str:
+        try:
+            text = ""
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            for page in pdf_reader.pages:
                 text += page.extract_text() + "\n"
-    except Exception as e:
-        print(f"Error reading PDF: {e}")
-    return text
+            return TextProcessor.clean_text(text)
+        except Exception as e:
+            logger.error(f"Error extracting text from PDF: {str(e)}")
+            raise
 
-def extract_text_from_image(image_path):
-    """Extract text from image using OCR."""
-    try:
-        text = pytesseract.image_to_string(Image.open(image_path))
-        return text
-    except Exception as e:
-        print(f"Error reading image: {e}")
-        return ""
+    @staticmethod
+    def extract_text_from_image(image_file) -> str:
+        try:
+            image = Image.open(image_file)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            image = image.resize((image.width * 2, image.height * 2))
+            text = pytesseract.image_to_string(image)
+            return TextProcessor.clean_text(text)
+        except Exception as e:
+            logger.error(f"Error extracting text from image: {str(e)}")
+            raise
+
+class ContentGenerator:
+    def __init__(self, text: str):
+        self.text = text
+        self.sentences = sent_tokenize(text)
+        self.important_sentences = TextProcessor.get_important_sentences(self.sentences)
+
+    def generate_study_question(self, sentence: str) -> str:
+        """Generate a structured study question from a sentence."""
+        doc = nlp(sentence)
+        subject = None
+        verb = None
+        object_ = None
+        
+        for token in doc:
+            if 'subj' in token.dep_:
+                subject = token.text
+            if token.dep_ == 'ROOT':
+                verb = token.text
+            if 'obj' in token.dep_:
+                object_ = token.text
+        
+        if subject and verb and object_:
+            return f"What does {subject} {verb} in relation to {object_}?"
+        elif subject and verb:
+            return f"What does {subject} {verb}?"
+        elif verb and object_:
+            return f"How does {object_} affect {verb}?"
+        else:
+            return f"What is {sentence}?"
+
+    def generate_study_guide(self) -> List[Dict[str, str]]:
+        """Generate study guide with only questions."""
+        return [{"question": self.generate_study_question(sentence)} 
+                for sentence in self.important_sentences[:10]]
+
+    def generate_faq(self) -> List[Dict[str, str]]:
+        """Generate FAQ from content."""
+        question_templates = [
+            "What are the key aspects of {}?",
+            "How does {} work?",
+            "Why is {} significant?",
+            "Can you explain {}?",
+            "What's important to know about {}?"
+        ]
+        
+        return [{
+            "question": question_templates[i % len(question_templates)].format(
+                self._extract_topic(sentence)),
+            "answer": sentence,
+            "category": "Main Concepts" if i < 4 else "Additional Information"
+        } for i, sentence in enumerate(self.important_sentences[:8])]
+
+    def generate_brief(self) -> Dict[str, any]:
+        """Generate a comprehensive brief."""
+        top_sentences = self.important_sentences[:5]
+        return {
+            "summary": " ".join(top_sentences),
+            "key_points": [{"point": sent, "index": i+1} 
+                          for i, sent in enumerate(top_sentences)],
+            "document_stats": {
+                "total_paragraphs": len(self.text.split('\n\n')),
+                "total_sentences": len(self.sentences),
+                "estimated_reading_time": len(self.text.split()) // 200
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+    def _extract_topic(self, sentence: str) -> str:
+        """Extract the main topic from a sentence."""
+        words = word_tokenize(sentence)
+        tagged = pos_tag(words)
+        nouns = [word for word, tag in tagged if tag.startswith('NN')]
+        return nouns[0] if nouns else words[0]
+
+@app.route('/')
+def home():
+    return jsonify({
+        "status": "active",
+        "endpoints": {
+            "upload": "/upload",
+            "health": "/health"
+        },
+        "supported_formats": list(Config.ALLOWED_EXTENSIONS)
+    })
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Upload and process the file."""
-    if 'file' not in request.files:
-        return jsonify({"status": "error", "message": "No file part"}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"status": "error", "message": "No selected file"}), 400
-    
-    if file and allowed_file(file.filename):
-        # Generate a secure file name and save it to the 'uploads' folder
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(file_path)
-
-        # Extract text from the uploaded file
-        text = ""
-        if filename.lower().endswith('.pdf'):
-            text = extract_text_from_pdf(file_path)
-        elif filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-            text = extract_text_from_image(file_path)
-
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({"error": f"Only {', '.join(Config.ALLOWED_EXTENSIONS)} files are allowed"}), 400
+        
+        # Process file in memory
+        if file.filename.lower().endswith('.pdf'):
+            text = DocumentProcessor.extract_text_from_pdf(file)
+        else:
+            text = DocumentProcessor.extract_text_from_image(file)
+        
         if not text.strip():
-            return jsonify({"status": "error", "message": "Could not extract text"}), 500
+            return jsonify({"error": "Could not extract text from the file"}), 400
+        
+        # Generate content
+        generator = ContentGenerator(text)
+        
+        # Generate all content types
+        output = {
+            "study_guide": generator.generate_study_guide(),
+            "faq": generator.generate_faq(),
+            "brief": generator.generate_brief()
+        }
+        
+        return jsonify(output)
 
-        # Save extracted text to a new file in the 'outputs' folder
-        output_filename = f"{os.path.splitext(filename)[0]}_notes.txt"
-        output_path = os.path.join(OUTPUT_FOLDER, output_filename)
-        with open(output_path, 'w') as output_file:
-            output_file.write(text)
+    except Exception as e:
+        logger.error(f"Error during file processing: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
-        # Return the download URL for the user to download the generated notes
-        return jsonify({
-            "status": "success",
-            "message": "File processed successfully",
-            "download_url": f"/download/{output_filename}"
-        }), 200
-    
-    return jsonify({"status": "error", "message": "File type not allowed"}), 400
-
-@app.route('/download/<filename>', methods=['GET'])
-def download_file(filename):
-    """Allow the user to download the generated file."""
-    file_path = os.path.join(OUTPUT_FOLDER, filename)
-    if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
-    return jsonify({"status": "error", "message": "File not found"}), 404
-
-@app.route('/health', methods=['GET'])
+@app.route('/health')
 def health_check():
-    """Health check endpoint to ensure the app is running."""
-    return jsonify({"status": "healthy"}), 200
+    return jsonify({
+        "status": "healthy",
+        "message": "The API is up and running!"
+    })
+
+def allowed_file(filename: str) -> bool:
+    """Check if the file has an allowed extension."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=Config.PORT, debug=True)
