@@ -12,11 +12,12 @@ from langchain_openai import OpenAIEmbeddings
 import json
 from uitils.extraction import extract_text_from_file, extract_doctype_from_file, extract_embeddings_from_file, extract_keywords_from_file, extract_chapter_name_subject, extract_syllabus_or_date_changes
 from uitils.portfolio import createProfile, updateProfile, addRoadmap
-from uitils.chatbot import process_query, check_up_call,generate_quiz,generate_openai
+from uitils.chatbot import process_query, check_up_call,generate_quiz,generate_openai, interview
 from pymongo import MongoClient
 from uitils.test import test_extract_text_from_file
 from uitils.courses import generate_course
 from uitils.flashcards import SimpleFlashcardGenerator
+from uitils.quiznew import extract_text_from_pdf, generate_quiz_from_pdf
 import dotenv
 dotenv.load_dotenv()
 
@@ -184,7 +185,7 @@ def call():
     tx = check_up_call(student_name, phone_number)
     return jsonify({"response": tx})
 
-@app.route('/interview', methods=['POST'])
+@app.route('/interview-tech', methods=['POST'])
 def interview_call():
     # Extract JSON input
     data = request.get_json()
@@ -194,8 +195,8 @@ def interview_call():
     student_name = data['name']
     phone_number = data['phone_number']
 
-    # Call the function with dynamic inputs
-    tx = interview_call(student_name, phone_number)  # Pass both arguments here
+    # Call the 'interview' function from chat.py
+    tx = interview(student_name, phone_number)  # Pass both arguments to the correct function
     return jsonify({"response": tx})
 
     # Call the function with dy
@@ -235,13 +236,47 @@ def load_roadmaps():
     return jsonify({"roadmaps": roadmaps}), 200
 
 
-@app.route('/quiz', methods=['POST'])
-def quiz():
-    data = request.json
-    prompt = data.get("prompt",[])
-    user_id = data.get("user_id")
-    quiz= generate_quiz(prompt,user_id=user_id,num_questions=data.get("num_questions",5))
-    return jsonify({"response": quiz}), 200
+# @app.route('/quiz', methods=['POST'])
+# def quiz():
+#     data = request.json
+#     prompt = data.get("prompt",[])
+#     user_id = data.get("user_id")
+#     quiz= generate_quiz(prompt,user_id=user_id,num_questions=data.get("num_questions",5))
+#     return jsonify({"response": quiz}), 200
+
+@app.route('/upload_pdf', methods=['POST'])
+def upload_pdf():
+    try:
+        # Check if a file is part of the request
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in the request"}), 400
+        
+        file = request.files['file']
+        
+        # Ensure the file is a PDF
+        if not file.filename.endswith('.pdf'):
+            return jsonify({"error": "Only PDF files are allowed"}), 400
+
+        # Save the file temporarily
+        file_path = f'temp/{file.filename}'
+        os.makedirs('temp', exist_ok=True)
+        file.save(file_path)
+
+        # Extract text and generate quiz
+        pdf_text = extract_text_from_pdf(file_path)
+        if not pdf_text:
+            return jsonify({"error": "Failed to extract text from the PDF"}), 400
+        
+        quiz = generate_quiz_from_pdf(pdf_text, num_questions=5)
+
+        # Clean up temporary file
+        os.remove(file_path)
+
+        return jsonify({"response": quiz}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/course', methods=['POST'])
 def generate_course_endpoint():
