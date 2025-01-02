@@ -1,7 +1,8 @@
 import os
 import json
 from pymongo import MongoClient
-from bson import ObjectId
+# Import from bson.objectid as recommended
+from bson.objectid import ObjectId
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -77,7 +78,7 @@ def get_profile_from_mongo(user_id):
 
     Args:
         user_id (str): The unique user identifier.
-    
+
     Returns:
         dict: User profile if found, otherwise None.
     """
@@ -93,7 +94,7 @@ def delete_profile(user_id):
 
     Args:
         user_id (str): The unique user identifier.
-    
+
     Returns:
         bool: True if deletion was successful, False if no profile was found.
     """
