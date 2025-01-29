@@ -204,7 +204,7 @@ export default function DocumentsPage() {
                       <TableCell className="font-medium">
                         <div className="flex items-center space-x-2">
                           <FileText className="h-4 w-4 text-gray-400" />
-                          <span>{doc.name}</span>
+                          <span>{doc.name.split(/-(.+)/)[1]}</span>
                         </div>
                       </TableCell>
                       <TableCell>{doc.subject}</TableCell>
